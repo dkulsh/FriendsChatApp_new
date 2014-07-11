@@ -1,17 +1,27 @@
 package com.example.friendschatapp;
 
+import java.lang.reflect.Array;
+import java.lang.reflect.Type;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.provider.ContactsContract;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
 import android.widget.BaseExpandableListAdapter;
+import android.widget.CheckBox;
+import android.widget.CompoundButton;
+import android.widget.CompoundButton.OnCheckedChangeListener;
 import android.widget.ImageView;
 import android.widget.ListView;
 import android.widget.TextView;
@@ -21,9 +31,13 @@ public class ExpandableParentLevelAdapter extends BaseExpandableListAdapter {
 	String[] groupTypes = {"Friends", "Family", "Others"};
 	int[] drawables = {R.drawable.friends, R.drawable.family_icon, R.drawable.others};
 	
-	Set<HashSet<String>> friendGroups = new HashSet<HashSet<String>>();
-	Set<HashSet<String>> familyGroups = new HashSet<HashSet<String>>();
-	Set<HashSet<String>> othersGroups = new HashSet<HashSet<String>>();
+	List<HashMap<String, HashSet<String>>> friendGroupList;
+	List<HashMap<String, HashSet<String>>> familyGroupList;
+	List<HashMap<String, HashSet<String>>> othersGroupList;
+	
+	Object[] mapsFriend;
+	Object[] mapsFamily;
+	Object[] mapsOther;
 	
 	LayoutInflater inflater;
 	Context context;
@@ -33,17 +47,22 @@ public class ExpandableParentLevelAdapter extends BaseExpandableListAdapter {
 		this.context = context;
 		
 		Gson gson = new Gson();
+		Type collectionType = new TypeToken<List<HashMap<String, HashSet<String>>>>(){}.getType();
 		
-		SharedPreferences prefFriend = context.getSharedPreferences(groupTypes[1], Context.MODE_PRIVATE);
-		if(prefFriend.contains(groupTypes[1])){
-			
-			String jsonFriends = prefFriend.getString(groupTypes[1], "");
-			gson.fromJson(jsonFriends, Set<>);
-		}
+		SharedPreferences prefFriend = context.getSharedPreferences(groupTypes[0], Context.MODE_PRIVATE);
+		String friendGroupSetString = prefFriend.getString(groupTypes[0], "");
+		friendGroupList = new Gson().fromJson(friendGroupSetString, collectionType);
+		mapsFriend = friendGroupList.toArray();
 		
 		SharedPreferences prefFamily = context.getSharedPreferences(groupTypes[1], Context.MODE_PRIVATE);
+		String familyGroupSetString = prefFamily.getString(groupTypes[1], "");
+		familyGroupList = new Gson().fromJson(familyGroupSetString, collectionType);
+		mapsFamily = familyGroupList.toArray();
 		
-		SharedPreferences prefOther = context.getSharedPreferences(groupTypes[1], Context.MODE_PRIVATE);
+		SharedPreferences prefOther = context.getSharedPreferences(groupTypes[2], Context.MODE_PRIVATE);
+		String othersGroupSetString = prefOther.getString(groupTypes[2], "");
+		othersGroupList = new Gson().fromJson(othersGroupSetString, collectionType);
+		mapsOther = othersGroupList.toArray();
 	}
 
 	@Override
@@ -54,8 +73,20 @@ public class ExpandableParentLevelAdapter extends BaseExpandableListAdapter {
 
 	@Override
 	public int getChildrenCount(int groupPosition) {
+		
+		switch (groupPosition) {
+		
+		case 1:
+			return friendGroupList.size();
+		case 2:
+			return familyGroupList.size();
+		case 3:
+			return othersGroupList.size();
+		default:
+			break;
+		}
 
-		return pref.getInt(groupTypes[groupPosition], 0);
+		return 0;
 	}
 
 	@Override
@@ -91,14 +122,29 @@ public class ExpandableParentLevelAdapter extends BaseExpandableListAdapter {
 	@Override
 	public View getGroupView(int groupPosition, boolean isExpanded,
 			View convertView, ViewGroup parent) {
+		
+		final int groupPositionView = groupPosition;
 
-		View view = convertView == null ? inflater.inflate(R.layout.list_row, null) : convertView;
+		View view = convertView == null ? inflater.inflate(R.layout.manage_groups_row, null) : convertView;
 		
-		ImageView navOptionIcon = (ImageView) view.findViewById(R.id.imgItemIcon);
-		TextView navOptionText = (TextView) view.findViewById(R.id.tvRow);
+		ImageView parentIcon = (ImageView) view.findViewById(R.id.imgItemIcon);
+		TextView parentText = (TextView) view.findViewById(R.id.tvRow);
 		
-		navOptionIcon.setImageResource(drawables[groupPosition]);
-		navOptionText.setText(groupTypes[groupPosition]);
+		CheckBox chkBox = (CheckBox) view.findViewById(R.id.chkBox);
+		//chkBox.setVisibility(View.GONE);
+		chkBox.setOnCheckedChangeListener(new OnCheckedChangeListener() {
+			
+			@Override
+			public void onCheckedChanged(
+					CompoundButton buttonView,
+					boolean isChecked) {
+				
+				GroupManager.groupTypeSelectionList.add(groupPositionView, isChecked);
+			}
+		});
+		
+		parentIcon.setImageResource(drawables[groupPosition]);
+		parentText.setText(groupTypes[groupPosition]);
 		
 		return view;
 	}
@@ -108,6 +154,7 @@ public class ExpandableParentLevelAdapter extends BaseExpandableListAdapter {
 			boolean isLastChild, View convertView, ViewGroup parent) {
 		
 		ListView secondLevelList = new ListView(context);
+		secondLevelList.setChoiceMode(ListView.CHOICE_MODE_SINGLE);
 		secondLevelList.setAdapter(new SecondLevelAdapter(groupPosition));
 		return secondLevelList;
 	}
@@ -129,8 +176,20 @@ public class ExpandableParentLevelAdapter extends BaseExpandableListAdapter {
 
 		@Override
 		public int getCount() {
-			SharedPreferences pref = context.getSharedPreferences(groupTypes[groupPosition], Context.MODE_PRIVATE);
-			return pref.getInt(groupTypes[groupPosition], 0);
+			
+			switch (groupPosition) {
+			
+			case 1:
+				return friendGroupList.size();
+			case 2:
+				return familyGroupList.size();
+			case 3:
+				return othersGroupList.size();
+			default:
+				break;
+			}
+
+			return 0;
 		}
 
 		@Override
@@ -148,13 +207,56 @@ public class ExpandableParentLevelAdapter extends BaseExpandableListAdapter {
 		@Override
 		public View getView(int position, View convertView, ViewGroup parent) {
 			
-			View view = convertView == null ? inflater.inflate(R.layout.list_row, null) : convertView;
+			final int positionView = position;
+			final ViewGroup parentViewGroup = parent;
 			
-			ImageView navOptionIcon = (ImageView) view.findViewById(R.id.imgItemIcon);
-			TextView navOptionText = (TextView) view.findViewById(R.id.tvRow);
+			View view = convertView == null ? inflater.inflate(R.layout.manage_groups_row, null) : convertView;
 			
-			navOptionIcon.setImageResource(drawables[groupPosition]);
-			navOptionText.setText(groupTypes[groupPosition]);
+			ImageView childIcon = (ImageView) view.findViewById(R.id.imgItemIcon);
+			childIcon.setVisibility(View.GONE);
+			
+			TextView childText = (TextView) view.findViewById(R.id.tvRow);
+			
+			CheckBox chkBox = (CheckBox) view.findViewById(R.id.chkBox);
+			//chkBox.setVisibility(View.GONE);
+			chkBox.setOnCheckedChangeListener(new OnCheckedChangeListener() {
+				
+				@Override
+				public void onCheckedChanged(
+						CompoundButton buttonView,
+						boolean isChecked) {
+					
+					TextView text = (TextView) ((View) parentViewGroup).findViewById(R.id.tvRow);
+					String gpType = text.getText().toString();
+					
+					int groupIndex = Arrays.asList(groupTypes).indexOf(gpType);
+					GroupManager.groupSelectionList[groupIndex].add(positionView, isChecked);
+					
+					GroupManager.groupTypeSelectionList.add(groupIndex, isChecked);
+				}
+			});
+			
+			String childName = "";
+			
+			switch (groupPosition) {
+			
+			case 1:
+				childName = ((HashMap)mapsFriend[position]).keySet().toString();				
+				break;
+				
+			case 2:
+				childName = ((HashMap)mapsFamily[position]).keySet().toString();				
+				break;
+				
+			case 3:
+				childName = ((HashMap)mapsOther[position]).keySet().toString();				
+				break;
+				
+			default:
+				childName = "";
+			}
+			
+			childText.setText(childName);
 			
 			return view;
 		}
